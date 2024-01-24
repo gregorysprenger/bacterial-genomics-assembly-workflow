@@ -87,7 +87,6 @@ include { QA_ASSEMBLY_QUAST                       } from "../modules/local/qa_as
 // SUBWORKFLOW: Consisting of a mix of local and nf-core/modules
 //
 include { INPUT_CHECK                             } from "../subworkflows/local/input_check"
-include { HOST_REMOVAL                            } from "../subworkflows/local/host_removal"
 include { DOWNSAMPLE                              } from "../subworkflows/local/downsampling"
 include { ASSEMBLE_CONTIGS                        } from "../subworkflows/local/assemble_contigs"
 
@@ -102,13 +101,6 @@ if ( toLower(params.assembler) == "skesa" ) {
     var_assembler_name = "SKESA"
 } else {
     var_assembler_name = "SPAdes"
-}
-
-// NCBI's SRA Human Scrubber
-if (params.sra_scrubber_db) {
-    ch_sra_scrubber_db_file = file(params.sra_scrubber_db, checkIfExists: true)
-} else {
-    ch_sra_scrubber_db_file = []
 }
 
 // PhiX Reference
@@ -256,16 +248,9 @@ workflow ASSEMBLY {
                                     [ meta, file]
                             }
 
-    // SUBWORKFLOW: Remove host from FastQ files
-    HOST_REMOVAL (
-        ch_infile_handling,
-        ch_sra_scrubber_db_file
-    )
-    ch_versions = ch_versions.mix(HOST_REMOVAL.out.versions)
-
     // SUBWORKFLOW: Downsample FastQ files
     DOWNSAMPLE (
-        HOST_REMOVAL.out.host_removed_reads
+        ch_infile_handling
     )
     ch_versions = ch_versions.mix(DOWNSAMPLE.out.versions)
 
@@ -323,7 +308,7 @@ workflow ASSEMBLY {
     // Prepare kraken1 database for use
     if ( ch_kraken1_db_file ) {
         if ( ch_kraken1_db_file.extension in ['gz', 'tgz'] ) {
-// Add meta information
+            // Add meta information
             ch_kraken1_db = Channel.of(ch_kraken1_db_file)
                                 .map{
                                     db ->
@@ -379,7 +364,7 @@ workflow ASSEMBLY {
     // Prepare kraken2 database for use
     if ( ch_kraken2_db_file ) {
         if ( ch_kraken2_db_file.extension in ['gz', 'tgz'] ) {
-// Add meta information
+            // Add meta information
             ch_kraken2_db = Channel.of(ch_kraken1_db_file)
                                 .map{
                                     db ->
@@ -511,7 +496,7 @@ workflow ASSEMBLY {
     // Prepare BLAST database for use
     if ( ch_blast_db_file ) {
         if ( ch_blast_db_file.extension in ['gz', 'tgz'] ) {
-// Add meta information
+            // Add meta information
             ch_blast_db = Channel.of(ch_blast_db_file)
                             .map{
                                 db ->
@@ -520,9 +505,9 @@ workflow ASSEMBLY {
                                     [ meta, db ]
                             }
             // Expects to be .tar.gz!
-                BLAST_DB_PREPARATION_UNIX (
-                    ch_blast_db
-                )
+            BLAST_DB_PREPARATION_UNIX (
+                ch_blast_db
+            )
             ch_versions = ch_versions.mix(BLAST_DB_PREPARATION_UNIX.out.versions)
             ch_db_for_blast = BLAST_DB_PREPARATION_UNIX.out.db
 
@@ -651,7 +636,7 @@ workflow ASSEMBLY {
     // PROCESS: Classify assembly FastA file using GTDB-Tk
     if (!params.skip_gtdbtk && params.gtdb_db) {
         if ( ch_gtdbtk_db_file.extension in ['gz', 'tgz'] ) {
-// Add meta information
+            // Add meta information
             ch_gtdb_db = Channel.of(ch_gtdbtk_db_file)
                             .map{
                                 db ->
@@ -673,7 +658,6 @@ workflow ASSEMBLY {
                                 .map{
                                     [ it[0].getSimpleName(), it ]
                                 }
-                                
         } else {
             error("Unsupported object given to --gtdb_db, database must be supplied as either a directory or a .tar.gz file!")
         }
@@ -694,7 +678,7 @@ workflow ASSEMBLY {
     // PROCESS: Classify contigs with BUSCO
     if (!params.skip_busco && params.busco_db) {
         if ( ch_busco_db_file.extension in ['gz', 'tgz'] ) {
-        // Add meta information
+            // Add meta information
             ch_busco_db = Channel.of(ch_busco_db_file)
                             .map{
                                 db ->
